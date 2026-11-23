@@ -13,9 +13,9 @@ constexpr int LORA_SCK = 18, LORA_MISO = 19, LORA_MOSI = 23;
 constexpr int LORA_CS = 5, LORA_RST = 27, LORA_DIO0 = 33;
 constexpr int LCD_SDA = 21, LCD_SCL = 22;
 // Los dos LEDs indican exclusivamente el resultado de las comunicaciones.
-constexpr int LED_VERDE = 25, LED_ROJO = 26;
+constexpr int LED_VERDE = 26, LED_ROJO = 25;
 // Pulsador conectado a GND. Usamos la resistencia interna de pull-up.
-constexpr int BOTON = 32;
+constexpr int BOTON = 14;
 constexpr uint32_t VIGENCIA_MS = 15000;
 constexpr uint32_t ANTIRREBOTE_MS = 40;
 constexpr uint32_t PULSACION_LARGA_MS = 1200;

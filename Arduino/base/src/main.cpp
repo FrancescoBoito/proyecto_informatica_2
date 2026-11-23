@@ -12,8 +12,15 @@
 constexpr int LORA_SCK = 18, LORA_MISO = 19, LORA_MOSI = 23;
 constexpr int LORA_CS = 5, LORA_RST = 27, LORA_DIO0 = 33;
 constexpr int LCD_SDA = 21, LCD_SCL = 22;
-constexpr int LED_ENLACE = 25, LED_ALARMA = 26;
+// Los dos LEDs indican exclusivamente el resultado de las comunicaciones.
+constexpr int LED_VERDE = 25, LED_ROJO = 26;
+// Pulsador conectado a GND. Usamos la resistencia interna de pull-up.
+constexpr int BOTON = 32;
 constexpr uint32_t VIGENCIA_MS = 15000;
+constexpr uint32_t ANTIRREBOTE_MS = 40;
+constexpr uint32_t PULSACION_LARGA_MS = 1200;
+constexpr uint32_t REFRESCO_LCD_MS = 500;
+constexpr float ALERTA_HELADA_C = 2.0f;
 constexpr uint32_t INTERVALO_ESTADO_MS = 3000;
 
 // El registro del SX1278 indica si recibió una trama y si pasó el CRC.
@@ -36,6 +43,27 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 Medicion mediciones[CANTIDAD_NODOS];
 uint32_t ultimaLectura[CANTIDAD_NODOS] = {};
 bool recibioDatos[CANTIDAD_NODOS] = {};
+
+// Se guarda el resultado del último turno de cada nodo.
+// Un turno es correcto al recibir el OK final (POLL, DATOS, ACK, OK).
+bool turnoEvaluado[CANTIDAD_NODOS] = {};
+bool turnoCorrecto[CANTIDAD_NODOS] = {};
+uint32_t errores[CANTIDAD_NODOS] = {};
+
+// Extremos de temperatura BMP180 de cada nodo, desde que encendió la base.
+float temperaturaMin[CANTIDAD_NODOS] = {NAN, NAN};
+float temperaturaMax[CANTIDAD_NODOS] = {NAN, NAN};
+
+// Variables de navegación para el LCD de 16 columnas y 2 filas.
+uint8_t pantallaActual = 0; // 0=ambos, 1=nodo1, 2=nodo2, 3=diagnóstico
+uint32_t ultimoRefrescoLCD = 0;
+
+// El antirrebote evita contar varios clics por una sola pulsación.
+bool lecturaAnteriorBoton = HIGH;
+bool estadoEstableBoton = HIGH;
+uint32_t ultimoCambioBoton = 0;
+uint32_t inicioPulsacion = 0;
+bool pulsacionLargaProcesada = false;
 
 // Los límites iniciales coinciden con Processing. El comando CONFIG los actualiza.
 float limiteFrio = 0.0f;
@@ -64,9 +92,120 @@ void filaLCD(uint8_t fila, const String &texto) {
     }
 }
 
-// Arma el título que se muestra en el LCD durante el turno.
-String nombreNodoActual() {
-    return String("Nodo ") + String(nodoActual);
+// Marca el resultado de la última consulta del nodo actual.
+// Este registro NO modifica el protocolo de radio ni el envío a Processing.
+void terminarTurno(bool correcto) {
+    uint8_t indice = nodoActual - 1;
+    turnoEvaluado[indice] = true;
+    turnoCorrecto[indice] = correcto;
+    if (!correcto) errores[indice]++;
+    etapa = ENTRE_TURNOS;
+}
+
+// Los LED son excluyentes. Antes de consultar ambos nodos quedan apagados.
+// Verde: ambos turnos OK y datos recientes. Rojo: falla alguno de los dos.
+void actualizarLeds(uint32_t ahora) {
+    bool conocidos = turnoEvaluado[0] && turnoEvaluado[1];
+    bool todoBien = conocidos;
+    for (int i = 0; i < CANTIDAD_NODOS; i++) {
+        if (!turnoCorrecto[i] || !recibioDatos[i] ||
+            ahora - ultimaLectura[i] >= VIGENCIA_MS) todoBien = false;
+    }
+    digitalWrite(LED_VERDE, conocidos && todoBien ? HIGH : LOW);
+    digitalWrite(LED_ROJO, conocidos && !todoBien ? HIGH : LOW);
+}
+
+// Lee el pulsador sin delay(): el programa sigue recibiendo mensajes LoRa.
+void leerBoton(uint32_t ahora) {
+    bool lectura = digitalRead(BOTON);
+    if (lectura != lecturaAnteriorBoton) ultimoCambioBoton = ahora;
+    lecturaAnteriorBoton = lectura;
+
+    // Se acepta el cambio solo si se mantuvo estable 40 ms.
+    if (ahora - ultimoCambioBoton >= ANTIRREBOTE_MS &&
+        lectura != estadoEstableBoton) {
+        estadoEstableBoton = lectura;
+        if (estadoEstableBoton == LOW) {
+            inicioPulsacion = ahora;
+            pulsacionLargaProcesada = false;
+        } else if (!pulsacionLargaProcesada) {
+            // Pulsación corta: pasa a la siguiente pantalla (0,1,2,3,0...).
+            pantallaActual = (pantallaActual + 1) % 4;
+            ultimoRefrescoLCD = ahora - REFRESCO_LCD_MS;
+        }
+    }
+
+    // La pulsación larga vuelve a inicio y no suma una corta al soltar.
+    if (estadoEstableBoton == LOW && !pulsacionLargaProcesada &&
+        ahora - inicioPulsacion >= PULSACION_LARGA_MS) {
+        pantallaActual = 0;
+        pulsacionLargaProcesada = true;
+        ultimoRefrescoLCD = ahora - REFRESCO_LCD_MS;
+    }
+}
+
+// Solo se muestran lecturas de menos de 15 segundos.
+// Evita anunciar una helada usando datos viejos de un nodo desconectado.
+bool datoReciente(int i, uint32_t ahora) {
+    return recibioDatos[i] && ahora - ultimaLectura[i] < VIGENCIA_MS;
+}
+
+// Convierte una cifra en texto; un sensor que devolvió nan aparece como --.
+String cifra(float valor, int decimales = 1) {
+    return isfinite(valor) ? String(valor, decimales) : String("--");
+}
+
+// Dibuja una de cuatro pantallas. filaLCD completa con espacios hasta 16.
+void mostrarPantalla(uint32_t ahora) {
+    String arriba, abajo;
+    bool ok1 = datoReciente(0, ahora);
+    bool ok2 = datoReciente(1, ahora);
+
+    if (pantallaActual == 0) {
+        // Pantalla 0: temperaturas BMP180 de ambos nodos.
+        arriba = "N1:" + String(ok1 ? cifra(mediciones[0].getTemperaturaBmp()) : "--") +
+                 " N2:" + String(ok2 ? cifra(mediciones[1].getTemperaturaBmp()) : "--");
+        bool helada1 = ok1 && isfinite(mediciones[0].getTemperaturaBmp()) &&
+                       mediciones[0].getTemperaturaBmp() <= ALERTA_HELADA_C;
+        bool helada2 = ok2 && isfinite(mediciones[1].getTemperaturaBmp()) &&
+                       mediciones[1].getTemperaturaBmp() <= ALERTA_HELADA_C;
+        if (helada1 || helada2) abajo = "ALERTA HELADA";
+        else if (!turnoEvaluado[0] || !turnoEvaluado[1]) abajo = "Esperando nodos";
+        else if (turnoCorrecto[0] && turnoCorrecto[1] && ok1 && ok2) abajo = "LoRa OK 2/2";
+        else abajo = "FALLA COMUNIC.";
+    } else if (pantallaActual == 1 || pantallaActual == 2) {
+        // Pantallas 1 y 2: DHT, humedad, BMP180 y presión del nodo elegido.
+        int i = pantallaActual - 1;
+        arriba = "Nodo " + String(i + 1);
+        if (!datoReciente(i, ahora)) {
+            abajo = recibioDatos[i] ? "Dato desactual." : "Sin datos";
+        } else {
+            // Dos vistas alternadas cada 4 segundos para no perder ninguna medida.
+            if ((ahora / 4000) % 2 == 0) {
+                arriba = "N" + String(i + 1) + " D:" + cifra(mediciones[i].getTemperaturaDht()) + "C";
+                abajo = "H:" + cifra(mediciones[i].getHumedad(), 0) + "%";
+            } else {
+                arriba = "N" + String(i + 1) + " B:" + cifra(mediciones[i].getTemperaturaBmp()) + "C";
+                abajo = "P:" + cifra(mediciones[i].getPresion(), 1) + " hPa";
+            }
+        }
+    } else {
+        // Pantalla 3: errores y RSSI; alterna con mínimas y máximas.
+        if ((ahora / 4000) % 2 == 0) {
+            arriba = "N1:" + String(turnoEvaluado[0] ? (turnoCorrecto[0] ? "OK" : "ERR") : "--") +
+                     " N2:" + String(turnoEvaluado[1] ? (turnoCorrecto[1] ? "OK" : "ERR") : "--");
+            abajo = "Errores:" + String(errores[0]) + "/" + String(errores[1]);
+        } else {
+            arriba = "RSSI " + String(ok1 ? String(mediciones[0].getRssi()) : "--") +
+                     "/" + String(ok2 ? String(mediciones[1].getRssi()) : "--");
+            abajo = "Min:" + cifra(temperaturaMin[0], 0) + "/" + cifra(temperaturaMin[1], 0);
+            // Los máximos pueden consultarse en la próxima alternancia.
+            if ((ahora / 4000) % 4 == 3)
+                abajo = "Max:" + cifra(temperaturaMax[0], 0) + "/" + cifra(temperaturaMax[1], 0);
+        }
+    }
+    filaLCD(0, arriba);
+    filaLCD(1, abajo);
 }
 
 // Envía una trama completa y vuelve a escuchar por LoRa.
@@ -92,8 +231,8 @@ void iniciarTurno() {
     // Por ejemplo, BASE|POLL|1|42 consulta al Nodo 1 con la secuencia 42.
     String consulta = String("BASE|POLL|") + String(nodoActual) + "|" + String(secuencia);
     if (!transmitir(consulta)) {
-        filaLCD(0, nombreNodoActual());
-        filaLCD(1, "Error LoRa TX");
+        Serial.println("Error LoRa TX.");
+        terminarTurno(false);
         return;
     }
 
@@ -101,8 +240,7 @@ void iniciarTurno() {
     etapa = ESPERANDO_DATOS;
     Serial.print("TX ");
     Serial.println(consulta.c_str());
-    filaLCD(0, nombreNodoActual());
-    filaLCD(1, "Consultando...");
+    // El LCD muestra la pantalla elegida incluso durante las consultas.
 }
 
 // Reutiliza el formateo de Medicion y agrega el ID para que Processing pueda
@@ -150,6 +288,7 @@ void procesarRespuesta(const String &mensaje, int rssi) {
         bool ackEnviado = transmitir(ack);
         inicioEspera = millis();
         etapa = ackEnviado ? ESPERANDO_OK : ENTRE_TURNOS;
+        if (!ackEnviado) terminarTurno(false);
 
         Serial.print(ackEnviado ? "TX " : "Error TX ");
         Serial.println(ack.c_str());
@@ -157,14 +296,22 @@ void procesarRespuesta(const String &mensaje, int rssi) {
             ultimaLectura[nodoActual - 1] = millis();
             recibioDatos[nodoActual - 1] = true;
             publicarMedicion(medicion);
+            // Mínimo y máximo de BMP180; solo si hay una lectura válida.
+            float temp = medicion.getTemperaturaBmp();
+            int i = nodoActual - 1;
+            if (isfinite(temp)) {
+                if (!isfinite(temperaturaMin[i]) || temp < temperaturaMin[i])
+                    temperaturaMin[i] = temp;
+                if (!isfinite(temperaturaMax[i]) || temp > temperaturaMax[i])
+                    temperaturaMax[i] = temp;
+            }
         } else {
             Serial.println("Medicion invalida. Se confirma solamente la recepcion.");
         }
-        filaLCD(1, ackEnviado ? String("R:") + String(rssi) + " dBm" : String("Error ACK TX"));
+        // El diagnóstico se consulta desde la cuarta pantalla.
     } else if (etapa == ESPERANDO_OK && mensaje == identificador + "|OK|" + numero) {
         // Este OK confirma que el nodo recibió el ACK de la base.
-        etapa = ENTRE_TURNOS;
-        filaLCD(1, "Ida y vuelta OK");
+        terminarTurno(true);
         Serial.println("Ida y vuelta OK.");
     }
 }
@@ -213,27 +360,15 @@ void leerUSB() {
     }
 }
 
-// Los LEDs muestran si hay algún nodo en línea y si hay una alarma vigente.
-void actualizarLeds(uint32_t ahora) {
-    bool enlace = false;
-    bool alarma = false;
-    for (int i = 0; i < CANTIDAD_NODOS; i++) {
-        if (recibioDatos[i] && ahora - ultimaLectura[i] < VIGENCIA_MS) {
-            enlace = true;
-            if (mediciones[i].hayAlarma(limiteFrio, limiteHumedad)) alarma = true;
-        }
-    }
-    digitalWrite(LED_ENLACE, enlace ? HIGH : LOW);
-    digitalWrite(LED_ALARMA, alarma ? HIGH : LOW);
-}
-
 // Inicia USB, LEDs, LCD y radio.
 void setup() {
     // Processing recibe las tramas por USB a 115200 baudios.
     Serial.begin(115200);
-    pinMode(LED_ENLACE, OUTPUT);
-    pinMode(LED_ALARMA, OUTPUT);
-    actualizarLeds(millis());
+    pinMode(BOTON, INPUT_PULLUP);
+    pinMode(LED_VERDE, OUTPUT);
+    pinMode(LED_ROJO, OUTPUT);
+    digitalWrite(LED_VERDE, LOW);
+    digitalWrite(LED_ROJO, LOW);
     Wire.begin(LCD_SDA, LCD_SCL);
     lcd.init();
     lcd.backlight();
@@ -259,9 +394,8 @@ void setup() {
     LoRa.enableCrc();
     LoRa.receive();
 
-    filaLCD(0, "BASE LISTA");
-    filaLCD(1, "Nodos 1 y 2");
     Serial.println("BASE_LISTA");
+    mostrarPantalla(millis());
 
     // Deja habilitado el primer turno inmediatamente. La resta se hace con
     // enteros sin signo, de la misma forma que los cálculos de tiempo de loop().
@@ -315,18 +449,23 @@ void loop() {
     // mientras se espera la respuesta y manejar el desborde del contador.
     uint32_t ahora = millis();
     if (etapa == ESPERANDO_DATOS && ahora - inicioEspera >= ESPERA_DATOS_MS) {
-        etapa = ENTRE_TURNOS;
-        filaLCD(1, "Sin respuesta");
+        terminarTurno(false);
         Serial.println("Fin de espera sin DATOS validos para este turno.");
     } else if (etapa == ESPERANDO_OK && ahora - inicioEspera >= ESPERA_OK_MS) {
-        etapa = ENTRE_TURNOS;
-        filaLCD(1, "Sin OK del nodo");
+        terminarTurno(false);
         Serial.println("Fin de espera sin OK del nodo.");
     }
 
     recibirRadio();
     leerUSB();
+    leerBoton(millis());
     actualizarLeds(millis());
+
+    // Se refresca la pantalla sin bloquear la recepción LoRa.
+    if (millis() - ultimoRefrescoLCD >= REFRESCO_LCD_MS) {
+        ultimoRefrescoLCD = millis();
+        mostrarPantalla(ultimoRefrescoLCD);
+    }
 
     // La PC puede distinguir una base conectada de dos nodos fuera de alcance.
     if (millis() - ultimoEstado >= INTERVALO_ESTADO_MS) {

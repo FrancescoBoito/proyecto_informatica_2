@@ -18,6 +18,13 @@ public:
     // Informa si una lectura válida supera alguno de los límites de alarma.
     bool hayAlarma(float limiteFrio, float limiteHumedad);
 
+    // Lecturas para el LCD. Solo consultan valores, no los modifican.
+    float getTemperaturaDht() const { return temperaturaDht; }
+    float getHumedad() const { return humedad; }
+    float getTemperaturaBmp() const { return temperaturaBmp; }
+    float getPresion() const { return presion; }
+    int getRssi() const { return rssi; }
+
 private:
     float temperaturaDht;  // °C, sensor DHT
     float humedad;         // %, sensor DHT
@@ -28,3 +35,4 @@ private:
 };
 
 #endif
+

@@ -12,7 +12,7 @@ constexpr int PIN_SCK = 6, PIN_MISO = 5, PIN_MOSI = 7;
 constexpr int PIN_CS = 10, PIN_RST = 0, PIN_DIO0 = 1;
 // Los pines son iguales en ambos ESP32-C3. Solo cambia el tipo de DHT.
 constexpr int PIN_DHT = 4, PIN_BMP_SDA = 3, PIN_BMP_SCL = 20;
-constexpr int TIPO_DHT = ID_NODO == 1 ? DHT11 : DHT22;
+constexpr int TIPO_DHT = ID_NODO == 1 ? DHT22 : DHT11;
 Sensores sensores(PIN_DHT, TIPO_DHT);
 
 constexpr uint32_t PAUSA_RADIO_MS = 30;

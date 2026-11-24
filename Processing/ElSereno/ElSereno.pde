@@ -33,8 +33,8 @@ int campoActivo = -1;
 
 // Prepara la ventana, recupera el histórico y busca puertos serie.
 public void setup() {
-  size(1040, 794);
-  surface.setTitle("El Sereno V4.0");
+  size(1240, 940);
+  surface.setTitle("El Sereno · Panel de monitoreo");
   textFont(createFont("SansSerif", 16));
   archivos = new ArchivosCsv(Paths.get(sketchPath("datos")));
   try {

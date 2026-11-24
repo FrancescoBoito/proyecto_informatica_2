@@ -1,6 +1,7 @@
-# El Sereno V4.1
+cat > README.md <<'FIN_README_SERENO'
+# El Sereno V4.2
 
-**Sistema de monitoreo ambiental inalámbrico** para vigilar **frío (heladas) y humedad alta** en dos puntos distintos, con alarmas, registro histórico y un panel de control en la computadora.
+**Sistema de monitoreo ambiental inalámbrico** para vigilar **frío (heladas) y humedad alta** en dos puntos distintos, con alarmas, registro histórico y gráficos en vivo en la computadora.
 
 > En una frase: dos estaciones con sensores miden temperatura, humedad y presión; mandan los datos por radio a una base; la base muestra las mediciones en un LCD navegable con un botón y se conecta por USB a una PC que las guarda y avisa cuando hay riesgo de helada o humedad excesiva.
 
@@ -22,6 +23,7 @@
 12. [Parámetros técnicos](#12-parámetros-técnicos)
 13. [Limitaciones y posibles mejoras](#13-limitaciones-y-posibles-mejoras)
 14. [Cambios de la V4.1](#14-cambios-de-la-v41)
+15. [Cambios de la V4.2](#15-cambios-de-la-v42)
 
 ---
 
@@ -46,15 +48,15 @@ El sistema tiene **tres partes**:
 |---|---|---|
 | **Nodo 1 y Nodo 2** | Placas con sensores a pie de campo | Miden y responden cuando la base les pregunta |
 | **Base** | Placa central con pantalla LCD, botón y dos LEDs | Pregunta a los nodos por turnos, permite navegar entre pantallas y reenvía los datos a la PC |
-| **Panel en la PC** | Programa hecho en Processing | Muestra datos, configura límites, suena la alarma y guarda el historial |
+| **Panel en la PC** | Programa hecho en Processing | Muestra datos y gráficos, configura límites, suena la alarma y guarda el historial |
 
 ### Diagrama funcional
 
 ```mermaid
 flowchart LR
     subgraph CAMPO["Zona de medición"]
-        N1["NODO 1<br/>ESP32-C3 + RA-02<br/>DHT11 + BMP180"]
-        N2["NODO 2<br/>ESP32-C3 + RA-02<br/>DHT22 + BMP180"]
+        N1["NODO 1<br/>ESP32-C3 + RA-02<br/>DHT22 + BMP180"]
+        N2["NODO 2<br/>ESP32-C3 + RA-02<br/>DHT11 + BMP180"]
     end
     subgraph CENTRAL["Puesto central"]
         B["BASE<br/>ESP32 + RA-02<br/>LCD 16x2 + botón + LEDs"]
@@ -92,7 +94,7 @@ flowchart TD
 |---|---|
 | ESP32-C3 SuperMini | Microcontrolador |
 | Módulo LoRa RA-02 (SX1278) | Radio de 433 MHz |
-| DHT11 (nodo 1) / DHT22 (nodo 2) | Temperatura y humedad |
+| DHT22 de 3 pines (nodo 1) / DHT11 de 3 pines (nodo 2) | Temperatura y humedad |
 | BMP180 | Temperatura y presión (I²C, dirección 0x77) |
 
 ### Base (x1)
@@ -114,6 +116,8 @@ flowchart TD
 
 > El RA-02 se alimenta con **3,3 V**. Conectar una antena adecuada antes de transmitir. Los LEDs externos necesitan resistencia en serie (220–330 Ω).
 
+En cada módulo DHT de tres pines, conectar el pin marcado `DATA` a GPIO4, `VCC` a 3,3 V y `GND` a GND. Revisar las etiquetas del módulo porque el orden físico de los pines puede variar.
+
 ---
 
 ## 4. Esquema físico (layout)
@@ -123,12 +127,12 @@ flowchart TD
   ┌────────────────────┐               ┌─────────────────────┐
   │ NODO 1             │    LoRa       │ BASE ESP32          │
   │ ESP32-C3           │◄─────────────►│ RA-02 433 MHz       │
-  │ DHT11 + BMP180     │               │ LCD 1602            │
+  │ DHT22 + BMP180     │               │ LCD 1602            │
   └────────────────────┘               │ Botón + LED V/R     │
   ┌────────────────────┐    LoRa       │                     │
   │ NODO 2             │◄─────────────►│                     │──USB──►PC
   │ ESP32-C3           │               │                     │       Processing
-  │ DHT22 + BMP180     │               └─────────────────────┘       CSV + audio
+  │ DHT11 + BMP180     │               └─────────────────────┘       CSV + audio
   └────────────────────┘
 ```
 
@@ -160,9 +164,9 @@ flowchart TD
 | RA-02 DIO0 | 33 |
 | LCD SDA | 21 |
 | LCD SCL | 22 |
-| LED verde | 25 |
-| LED rojo | 26 |
-| Pulsador | 32 (entre GPIO32 y GND) |
+| LED verde | 26 |
+| LED rojo | 25 |
+| Pulsador | 14 (entre GPIO14 y GND) |
 
 El pulsador usa `INPUT_PULLUP`: normalmente lee `HIGH` y al presionarlo lee `LOW`. No necesita resistencia externa.
 
@@ -170,15 +174,16 @@ El pulsador usa `INPUT_PULLUP`: normalmente lee `HIGH` y al presionarlo lee `LOW
 
 ```
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│ El Sereno V4.0 (panel Processing, sin cambios en V4.1)                              │
+│ El Sereno V4.2 (panel Processing con gráficos en vivo)                             │
 │ [Puerto USB] [Actualizar] [Conectar] [Abrir mediciones] [Abrir eventos] [Sonido]   │
 │ Alarma de frío (°C) [ 0.0 ]  Humedad alta (%) [ 90.0 ]  [Enviar límites]           │
 │ ┌──────────────────────────────────┐  ┌──────────────────────────────────┐         │
-│ │ Nodo 1 · DHT11 + BMP180          │  │ Nodo 2 · DHT22 + BMP180          │         │
+│ │ Nodo 1 · DHT22 + BMP180          │  │ Nodo 2 · DHT11 + BMP180          │         │
 │ │ En línea · RSSI -72 dBm          │  │ En línea · RSSI -80 dBm          │         │
 │ │ DHT 3.1 °C   Humedad 82.0 %      │  │ DHT 2.8 °C   Humedad 85.0 %      │         │
 │ │ BMP 3.0 °C   Presión 912.4 hPa   │  │ BMP 2.9 °C   Presión 912.1 hPa   │         │
 │ └──────────────────────────────────┘  └──────────────────────────────────┘         │
+│ [Temperatura BMP]       [Humedad DHT]        [Presión BMP]                         │
 │ Últimas 20 mediciones                                                              │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -258,8 +263,8 @@ Si una lectura tiene más de 15 segundos, el LCD la marca como desactualizada o 
 
 | LED | Cuándo se enciende |
 |---|---|
-| **Verde (GPIO25)** | Ya fueron evaluados ambos nodos; el último turno de cada uno terminó con `OK` y hay datos de menos de 15 s |
-| **Rojo (GPIO26)** | Después de evaluar ambos nodos, alguno no completó el turno o sus datos vencieron |
+| **Verde (GPIO26)** | Ya fueron evaluados ambos nodos; el último turno de cada uno terminó con `OK` y hay datos de menos de 15 s |
+| **Rojo (GPIO25)** | Después de evaluar ambos nodos, alguno no completó el turno o sus datos vencieron |
 | **Ambos apagados** | Todavía no se evaluaron los dos nodos desde el arranque |
 
 Los LEDs nunca se encienden juntos. **No representan las alarmas meteorológicas**: esas se indican en el LCD y en Processing.
@@ -296,7 +301,7 @@ Los cuatro valores son temperatura DHT (°C), humedad (%), temperatura BMP180 (�
 | Base → PC | `CONFIG_OK,frío,humedad` | Límites aceptados |
 | Base → PC | `CONFIG_ERROR` | Límites rechazados |
 
-**No se modificó el protocolo de V4.0**, por lo que los nodos y Processing conservan su firmware y código.
+**El formato de los mensajes serie se mantiene:** los gráficos leen las mismas mediciones `SERENO` que el panel ya guardaba en CSV.
 
 ---
 
@@ -328,14 +333,18 @@ solo durante los tramos bajo el límite. Los intervalos superiores a 15 s y los 
 
 ## 8. El panel de la PC
 
-Hecho en **Processing 4** (Java). Sigue igual que en V4.0:
+Hecho en **Processing 4** (Java). La interfaz incluye:
 
 - Elegir el puerto USB y conectar la base.
 - Ver el estado de la base y los dos nodos, con RSSI.
 - Configurar límites de frío y humedad y esperar confirmación.
-- Consultar las últimas 20 mediciones.
+- Consultar las últimas 20 mediciones y desplazarse por la tabla con la rueda del mouse.
+- Ver tendencias en vivo de temperatura BMP180, humedad DHT y presión BMP180 de ambos nodos. Al iniciar, los gráficos recuperan hasta 120 lecturas recientes del CSV; las nuevas lecturas se agregan automáticamente.
+- Comparar temperatura y humedad con los umbrales confirmados por la base.
 - Abrir los CSV y probar la alarma sonora.
 - Registrar cambios de conexión, lecturas y alarmas.
+
+El **nodo 1** aparece en turquesa y el **nodo 2** en naranja. Las líneas rojas de los gráficos de temperatura y humedad indican el límite configurado. Si una lectura falta, el gráfico deja un hueco en esa serie; las mediciones anteriores siguen disponibles.
 
 ---
 
@@ -390,12 +399,13 @@ proyecto_informatica_2/
         ├── ElSereno.pde           Programa principal
         ├── Comunicacion.pde       Puerto serie y alarmas
         ├── Panel.pde              Pantalla de la PC
+        ├── Graficos.pde           Tendencias de los dos nodos
         ├── Audio.pde              Alarma sonora
         ├── Nodo.java              Estado y frío acumulado
         └── ArchivosCsv.java       Lectura y escritura CSV
 ```
 
-En V4.1 solo cambian `README.md`, `Arduino/base/src/main.cpp` y `Arduino/base/lib/Medicion/Medicion.h`. No se agregaron bibliotecas ni archivos nuevos.
+La V4.2 modifica `ElSereno.pde`, `Panel.pde` y `ArchivosCsv.java`, y agrega `Graficos.pde`. No requiere bibliotecas externas adicionales a Processing 4.
 
 ---
 
@@ -411,11 +421,11 @@ En V4.1 solo cambian `README.md`, `Arduino/base/src/main.cpp` y `Arduino/base/li
 Desde `Arduino/nodo`:
 
 ```bash
-pio run -e nodo1 -t upload     # placa con DHT11
-pio run -e nodo2 -t upload     # placa con DHT22
+pio run -e nodo1 -t upload     # placa con DHT22
+pio run -e nodo2 -t upload     # placa con DHT11
 ```
 
-El código de ambos nodos no cambió en V4.1.
+El firmware selecciona DHT22 para `nodo1` y DHT11 para `nodo2`. Si se cambió esa selección en `Arduino/nodo/src/main.cpp`, hay que volver a cargar ambos nodos.
 
 ### Paso 2: cargar la base
 
@@ -430,19 +440,20 @@ Al iniciar, la base muestra el resumen en el LCD. El primer par de turnos determ
 
 ### Paso 3: probar el botón y los LEDs
 
-1. Conectar el pulsador entre GPIO32 y GND.
-2. Conectar LED verde a GPIO25 y LED rojo a GPIO26, **cada uno con su resistencia en serie**, con el cátodo a GND.
+1. Conectar el pulsador entre GPIO14 y GND.
+2. Conectar LED verde a GPIO26 y LED rojo a GPIO25, **cada uno con su resistencia en serie**, con el cátodo a GND.
 3. Presionar brevemente el botón: avanzar por las cuatro pantallas.
 4. Mantenerlo 1,2 s: volver al resumen.
 5. Verificar LED verde cuando ambos nodos respondan con `OK` y rojo cuando falle uno.
 
 ### Paso 4: abrir el panel
 
-1. Abrir `Processing/ElSereno/ElSereno.pde`.
+1. Abrir `Processing/ElSereno/ElSereno.pde` con todos los archivos `.pde` y `.java` dentro de la misma carpeta `ElSereno`. Si se descargó un ZIP, descomprimirlo completo antes de abrir el sketch.
 2. Ejecutar Processing.
 3. Seleccionar el puerto USB de la base y conectar.
 4. Cerrar antes el monitor serie de PlatformIO, si estaba abierto.
 5. Ajustar los límites y pulsar **Enviar límites**.
+6. Verificar que lleguen lecturas de los dos nodos: los gráficos y la tabla se actualizarán automáticamente.
 
 ### Si algo no anda
 
@@ -451,9 +462,10 @@ Al iniciar, la base muestra el resumen en el LCD. El primer par de turnos determ
 | LCD dice `ERROR LoRa` | SPI y alimentación de 3,3 V del RA-02 |
 | Nodo muestra error de LoRa | Conexiones y antena del nodo |
 | LED rojo fijo | Revisar datos y `OK` de cada nodo en el monitor serie |
-| Pulsador no cambia pantalla | GPIO32 a GND, sin conexión a 3,3 V |
+| Pulsador no cambia pantalla | GPIO14 a GND, sin conexión a 3,3 V |
 | Pantalla dice `Dato desactual.` | No hay medición reciente (menos de 15 s) |
 | Processing dice `Esperando base` | Puerto USB, monitor serie cerrado |
+| Processing dice `Cannot find a class or type named "Nodo"` | Comprobar que `Nodo.java` esté junto a `ElSereno.pde` dentro de `Processing/ElSereno/`; abrir el proyecto descomprimido completo |
 | Un valor aparece como `--` | El sensor o el nodo no informó ese dato |
 
 ---
@@ -494,22 +506,35 @@ Al iniciar, la base muestra el resumen en el LCD. El primer par de turnos determ
 - **Sin aviso remoto:** la alarma sonora depende de la PC.
 - **LCD pequeño:** las pantallas de cada nodo alternan valores cada 4 segundos.
 - **Extremos volátiles:** las temperaturas mínima y máxima se reinician al apagar la base.
-- **Mejoras posibles:** gráficos históricos, más nodos y alimentación solar de bajo consumo.
+- **Mejoras posibles:** gráficos de períodos más largos, más nodos y alimentación solar de bajo consumo.
 
 ---
 
 ## 14. Cambios de la V4.1
 
-**Se mantiene la V4.0 como base:** mismos nodos, protocolo `POLL/DATOS/ACK/OK`, frecuencias, parámetros LoRa, procesamiento de datos y panel Processing.
+La V4.1 mantuvo el protocolo `POLL/DATOS/ACK/OK`, las frecuencias y los parámetros LoRa. Originalmente el panel de Processing no cambió.
 
-**Se modifica únicamente el programa de la base:**
+En esa versión se modificó el programa de la base:
 
-- Un botón (`GPIO32`) para recorrer cuatro vistas; pulsación larga para regresar al resumen.
-- LED verde (`GPIO25`) y rojo (`GPIO26`) dedicados al estado de comunicación con los dos nodos.
+- Un botón para recorrer cuatro vistas; pulsación larga para regresar al resumen.
+- LED verde y rojo dedicados al estado de comunicación con los dos nodos.
 - Resumen con temperaturas BMP180 y aviso de riesgo de helada a 2 °C.
 - Pantallas individuales que alternan las cuatro mediciones de cada nodo.
 - Diagnóstico con RSSI, errores y temperaturas mínima y máxima.
 - Datos con antigüedad mayor a 15 s identificados como vencidos.
 - Código comentado, sin nuevas dependencias, con `millis()` para la navegación.
 
-La validación de hardware y la compilación de esta versión deben hacerse en PlatformIO antes de darla por finalizada.
+---
+
+## 15. Cambios de la V4.2
+
+- Se renovó el panel de Processing con tarjetas para cada nodo y gráficos en vivo de temperatura BMP180, humedad DHT y presión BMP180.
+- El nodo 1 se muestra en turquesa y usa DHT22; el nodo 2 se muestra en naranja y usa DHT11.
+- Se muestran los umbrales de temperatura y humedad en los gráficos. La tabla conserva las últimas 20 filas con desplazamiento.
+- El panel recupera hasta 120 mediciones recientes de `mediciones.csv` al abrirse y agrega las nuevas lecturas sin alterar el formato del archivo.
+- Se mantienen la comunicación `POLL/DATOS/ACK/OK`, los mensajes USB, las alarmas y los archivos CSV.
+- Se ajustó el firmware a los sensores instalados: nodo 1 con DHT22 y nodo 2 con DHT11.
+- Se corrigieron las conexiones de la base según el firmware actual: pulsador en GPIO14, LED verde en GPIO26 y LED rojo en GPIO25.
+
+La interfaz se probó en Processing 4 con ambos nodos en línea, gráficos con mediciones reales y límites confirmados por la base.
+FIN_README_SERENO

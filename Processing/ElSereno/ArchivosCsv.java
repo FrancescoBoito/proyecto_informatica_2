@@ -11,7 +11,8 @@ import java.time.format.DateTimeFormatter;
 final class ArchivosCsv {
     final Path mediciones;
     final Path eventos;
-    final String[][] recientes = new String[20][];
+    // El mismo buffer guarda datos para la tabla y para los gráficos.
+    final String[][] recientes = new String[120][];
     private int siguiente;
     private int cantidad;
     private static final String CABECERA_MEDICIONES =
@@ -78,12 +79,21 @@ final class ArchivosCsv {
 
     // Indica cuántas filas de historial se pueden mostrar.
     int cantidadReciente() {
-        return cantidad;
+        return Math.min(cantidad, 20);
     }
 
     // Devuelve la fila indicada contando desde la más reciente.
     String[] filaReciente(int posicion) {
         return recientes[(siguiente + recientes.length - 1 - posicion) % recientes.length];
+    }
+
+    // Los gráficos leen desde la muestra más antigua hasta la más nueva.
+    int cantidadGrafico() {
+        return cantidad;
+    }
+
+    String[] filaGrafico(int posicion) {
+        return recientes[(siguiente + recientes.length - cantidad + posicion) % recientes.length];
     }
 
     // Usa la hora local de la PC, ya que la base no tiene reloj de calendario.

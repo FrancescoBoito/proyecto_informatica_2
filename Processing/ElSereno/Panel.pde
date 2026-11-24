@@ -1,89 +1,131 @@
-// Dibuja controles, los dos nodos y las últimas 20 filas del archivo.
+int filaInicial = 0;
+final int COLOR_NODO_1 = 0xff52dfd2;
+final int COLOR_NODO_2 = 0xffffb86f;
+
+// Dibuja controles, los dos nodos, tendencias y mediciones recientes.
 void dibujarPanel() {
-  background(18, 27, 34);
-  fill(240);
-  textSize(28);
-  text("El Sereno V4.0", 20, 38);
+  background(12, 22, 32);
+  noStroke();
+  fill(22, 37, 49);
+  rect(0, 0, width, 160);
+  fill(COLOR_NODO_1);
+  rect(0, 0, width, 4);
+  fill(246);
+  textSize(30);
+  text("EL SERENO", 20, 40);
+  fill(154, 181, 195);
+  textSize(13);
+  text("RED MICROCLIMÁTICA  /  MONITOREO EN VIVO", 228, 37);
 
   String nombre = puertos.length == 0 ? "Sin puertos" : puertos[puertoElegido] + "  ›";
-  boton(20, 50, 202, puerto == null ? nombre : puertoActivo);
-  boton(230, 50, 104, "Actualizar");
-  boton(342, 50, 116, puerto == null ? "Conectar" : "Desconectar");
-  boton(510, 50, 158, "Abrir mediciones");
-  boton(676, 50, 143, "Abrir eventos");
-  boton(827, 50, 123, "Probar sonido");
+  boton(20, 54, 202, puerto == null ? nombre : puertoActivo);
+  boton(230, 54, 104, "Actualizar");
+  boton(342, 54, 116, puerto == null ? "Conectar" : "Desconectar");
+  boton(510, 54, 158, "Abrir mediciones");
+  boton(676, 54, 143, "Abrir eventos");
+  boton(827, 54, 123, "Probar sonido");
 
   fill(206, 223, 231);
   textSize(14);
-  text("Alarma de frío (°C)", 20, 117);
-  boton(163, 97, 75, entradas[0] + (campoActivo == 0 ? "|" : ""));
-  text("Humedad alta (%)", 265, 117);
-  boton(405, 97, 75, entradas[1] + (campoActivo == 1 ? "|" : ""));
-  boton(495, 97, 144, esperandoConfig ? "Confirmando…" : "Enviar límites");
+  text("Alarma de frío (°C)", 20, 123);
+  boton(163, 102, 75, entradas[0] + (campoActivo == 0 ? "|" : ""));
+  text("Humedad alta (%)", 265, 123);
+  boton(405, 102, 75, entradas[1] + (campoActivo == 1 ? "|" : ""));
+  boton(495, 102, 144, esperandoConfig ? "Confirmando…" : "Enviar límites");
 
   String enlace = estado == MONITOREO ? "Base conectada"
                       : estado == ESPERA ? "Esperando base" : "Base desconectada";
   fill(206, 223, 231);
   textSize(14);
   text(enlace + "  ·  " + aviso, 20, 150);
-  text("Aplicados " + decimal(limiteFrio, 1) + " °C / " + decimal(limiteHumedad, 1) + " %", 680, 117);
+  text("Aplicados " + decimal(limiteFrio, 1) + " °C / " + decimal(limiteHumedad, 1) + " %", 680, 123);
 
-  dibujarNodo(nodos[0], 20, 165, "DHT11 + BMP180");
-  dibujarNodo(nodos[1], 530, 165, "DHT22 + BMP180");
+  dibujarNodo(nodos[0], 20, 175, "DHT22 + BMP180");
+  dibujarNodo(nodos[1], 630, 175, "DHT11 + BMP180");
+  dibujarGrafico(20, 370, 386, 290, "TEMPERATURA BMP", "°C", 5, limiteFrio, true);
+  dibujarGrafico(427, 370, 386, 290, "HUMEDAD DHT", "%", 4, limiteHumedad, true);
+  dibujarGrafico(834, 370, 386, 290, "PRESIÓN BMP", "hPa", 6, 0, false);
   dibujarHistorial();
   fill(252, 184, 140);
   textSize(13);
-  text(errorArchivos.isEmpty() && errorAudio ? "No se pudo reproducir el sonido." : errorArchivos, 20, 780);
+  text(errorArchivos.isEmpty() && errorAudio ? "No se pudo reproducir el sonido." : errorArchivos, 20, height - 7);
 }
 
 // Presenta el estado y los valores recientes de una estación.
 void dibujarNodo(Nodo nodo, int x, int y, String sensores) {
   noStroke();
-  fill(33, 48, 57);
-  rect(x, y, 490, 132, 8);
+  fill(28, 46, 58);
+  rect(x, y, 590, 172, 10);
+  fill(nodo.id == 1 ? COLOR_NODO_1 : COLOR_NODO_2);
+  rect(x, y, 5, 172, 4);
   fill(244);
   textSize(20);
-  text("Nodo " + nodo.id + " · " + sensores, x + 12, y + 26);
+  text("Nodo " + nodo.id + " · " + sensores, x + 18, y + 29);
   textSize(14);
   fill(206, 223, 231);
   String estadoNodo = "Esperando primera lectura";
   if (estado != MONITOREO) estadoNodo = "Sin conexión con la base";
   else if (nodo.enLinea) estadoNodo = "En línea · RSSI " + nodo.rssi + " dBm";
   else if (nodo.recibido) estadoNodo = "Sin señal LoRa";
-  text(estadoNodo, x + 12, y + 48);
+  text(estadoNodo, x + 18, y + 51);
 
   if (nodo.enLinea) {
-    text("DHT " + valor(nodo.temperaturaDht, "°C") + "     Humedad " + valor(nodo.humedad, "%"), x + 12, y + 70);
-    text("BMP " + valor(nodo.temperaturaBmp, "°C") + "     Presión " + valor(nodo.presion, "hPa"), x + 12, y + 90);
+    fill(nodo.id == 1 ? COLOR_NODO_1 : COLOR_NODO_2);
+    textSize(26);
+    text(valor(nodo.temperaturaBmp, "°C"), x + 18, y + 96);
+    text(valor(nodo.humedad, "%"), x + 211, y + 96);
+    text(valor(nodo.presion, "hPa"), x + 388, y + 96);
+    fill(165, 198, 211);
+    textSize(13);
+    text("BMP °C", x + 18, y + 115);
+    text("Humedad DHT", x + 211, y + 115);
+    text("Presión BMP", x + 388, y + 115);
+    text("DHT " + valor(nodo.temperaturaDht, "°C"), x + 18, y + 145);
   }
-  text("Frío acumulado: " + decimal(nodo.exposicion, 2) + " °C·min", x + 12, y + 114);
+  fill(203, 223, 231);
+  textSize(13);
+  text("Frío acumulado: " + decimal(nodo.exposicion, 2) + " °C·min", x + 211, y + 145);
   boolean frio = nodo.enLinea && numeroValido(nodo.temperaturaBmp) && nodo.frio;
   boolean humedad = nodo.enLinea && numeroValido(nodo.humedad) && nodo.humedadAlta;
   if (frio || humedad) {
     fill(255, 151, 126);
     String alarmas = frio && humedad ? "HELADA Y HUMEDAD" : frio ? "HELADA" : "HUMEDAD ALTA";
-    text(alarmas, x + 302, y + 114);
+    textAlign(RIGHT);
+    text(alarmas, x + 574, y + 145);
+    textAlign(LEFT);
   }
 }
 
 // Muestra la tabla de mediciones recientes, empezando por la más nueva.
 void dibujarHistorial() {
-  int[] x = {28, 229, 292, 397, 500, 594, 693, 796, 890};
+  int[] x = {30, 255, 350, 448, 570, 700, 821, 945, 1068};
   String[] titulos = {"Fecha y hora", "Nodo", "Sec.", "DHT °C", "Hum. %", "BMP °C", "hPa", "dBm", "°C·min"};
   fill(244);
   textSize(19);
-  text("Últimas 20 mediciones", 20, 325);
+  text("ÚLTIMAS 20 MEDICIONES", 20, 697);
+  fill(155, 181, 195);
+  textSize(12);
+  text("Desplazá con la rueda para ver más filas", 290, 697);
   textSize(13);
   fill(177, 210, 224);
-  for (int i = 0; i < titulos.length; i++) text(titulos[i], x[i], 350);
-  for (int fila = 0; fila < archivos.cantidadReciente(); fila++) {
-    int y = 355 + fila * 20;
+  for (int i = 0; i < titulos.length; i++) text(titulos[i], x[i], 726);
+  int cantidad = archivos.cantidadReciente();
+  filaInicial = Math.min(filaInicial, Math.max(0, cantidad - 9));
+  for (int fila = 0; fila < 9 && fila + filaInicial < cantidad; fila++) {
+    int y = 732 + fila * 21;
     noStroke();
-    fill(fila % 2 == 0 ? color(33, 48, 57) : color(27, 39, 47));
-    rect(20, y, 1000, 20);
+    fill(fila % 2 == 0 ? color(28, 46, 58) : color(20, 37, 49));
+    rect(20, y, 1200, 21, 3);
     fill(232);
-    String[] datos = archivos.filaReciente(fila);
+    String[] datos = archivos.filaReciente(fila + filaInicial);
     for (int i = 0; i < datos.length; i++) text(datos[i].isEmpty() ? "—" : datos[i], x[i], y + 14);
+  }
+}
+
+public void mouseWheel(processing.event.MouseEvent rueda) {
+  if (mouseY >= 690 && mouseY < 930) {
+    filaInicial = constrain(filaInicial + rueda.getCount(), 0,
+                           Math.max(0, archivos.cantidadReciente() - 9));
   }
 }
 
@@ -123,26 +165,26 @@ void abrirCsv(Path ruta) {
 
 // Selecciona el control bajo el puntero y ejecuta su acción.
 public void mousePressed() {
-  if (sobre(20, 50, 202) && puerto == null && puertos.length > 0) {
+  if (sobre(20, 54, 202) && puerto == null && puertos.length > 0) {
     puertoElegido = (puertoElegido + 1) % puertos.length;
-  } else if (sobre(230, 50, 104)) {
+  } else if (sobre(230, 54, 104)) {
     listarPuertos();
-  } else if (sobre(342, 50, 116)) {
+  } else if (sobre(342, 54, 116)) {
     if (puerto == null) conectar();
     else cerrarPuerto("Puerto cerrado");
-  } else if (sobre(510, 50, 158)) {
+  } else if (sobre(510, 54, 158)) {
     abrirCsv(archivos.mediciones);
-  } else if (sobre(676, 50, 143)) {
+  } else if (sobre(676, 54, 143)) {
     abrirCsv(archivos.eventos);
-  } else if (sobre(827, 50, 123)) {
+  } else if (sobre(827, 54, 123)) {
     iniciarPitido();
-  } else if (sobre(163, 97, 75)) {
+  } else if (sobre(163, 102, 75)) {
     campoActivo = 0;
     entradas[0] = "";
-  } else if (sobre(405, 97, 75)) {
+  } else if (sobre(405, 102, 75)) {
     campoActivo = 1;
     entradas[1] = "";
-  } else if (sobre(495, 97, 144)) {
+  } else if (sobre(495, 102, 144)) {
     aplicarLimites();
   }
 }

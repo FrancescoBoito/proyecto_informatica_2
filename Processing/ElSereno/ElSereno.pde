@@ -1,3 +1,6 @@
+// .pde usa sintaxis Java y Processing une estas pestañas en un sketch.
+// processing.serial y las funciones de dibujo son de Processing; java.* y
+// javax.* pertenecen a Java y aportan archivos, reloj, escritorio y audio.
 import processing.serial.*;
 import java.awt.Desktop;
 import java.io.IOException;
@@ -6,10 +9,12 @@ import java.nio.file.Paths;
 import java.util.Locale;
 import javax.sound.sampled.*;
 
-// El estado del enlace de la PC se maneja aparte del enlace LoRa de cada nodo.
+// final fija constantes; int es entero, boolean vale true/false y long admite
+// intervalos grandes. El estado del USB se maneja aparte del LoRa de cada nodo.
 final int DESCONEXION = 0, ESPERA = 1, MONITOREO = 2;
 final int PLAZO_CONFIG = 4000;
 int estado = DESCONEXION;
+// Serial es un objeto de la biblioteca Processing; null significa «sin puerto».
 Serial puerto;
 String puertoActivo = "";
 String[] puertos = new String[0];
@@ -18,12 +23,14 @@ long ultimaActividadBase;
 boolean baseVista;
 boolean cerrando;
 
+// [] declara un arreglo; new construye un objeto independiente para cada nodo.
 Nodo[] nodos = {new Nodo(1), new Nodo(2)};
 ArchivosCsv archivos;
 String aviso = "";
 String errorArchivos = "";
 
-// Se separan los límites escritos de los aceptados por la base.
+// Se separan los límites escritos de los aceptados por la base: hasta CONFIG_OK
+// las alarmas y el frío acumulado siguen usando los límites anteriores.
 float limiteFrio = 0.0f, limiteHumedad = 90.0f;
 float frioPendiente, humedadPendiente;
 boolean esperandoConfig;
@@ -31,12 +38,15 @@ long momentoConfig;
 String[] entradas = {"0.0", "90.0"};
 int campoActivo = -1;
 
+// setup() es el punto de arranque de Processing y se ejecuta una sola vez.
 // Prepara la ventana, recupera el histórico y busca puertos serie.
 public void setup() {
+  // size, surface, textFont y sketchPath son facilidades de Processing.
   size(1240, 940);
   surface.setTitle("El Sereno · Panel de monitoreo");
   textFont(createFont("SansSerif", 16));
   archivos = new ArchivosCsv(Paths.get(sketchPath("datos")));
+  // try/catch es Java: intenta abrir los CSV y muestra el error si falla.
   try {
     archivos.iniciar();
     evento(0, "INICIO", "Processing iniciado");
@@ -46,7 +56,8 @@ public void setup() {
   listarPuertos();
 }
 
-// Atiende la base, comprueba los plazos y vuelve a dibujar el panel.
+// draw() es llamado repetidamente por Processing; cada vuelta atiende datos,
+// comprueba plazos y vuelve a dibujar el panel.
 public void draw() {
   leerSerie();
   vigilarEnlaces(relojMs());
@@ -55,11 +66,13 @@ public void draw() {
 
 // Tiempo monotónico para medir intervalos aunque se ajuste el reloj de pared.
 long relojMs() {
+  // System.nanoTime() es Java; / 1000000 lo convierte a milisegundos.
   return System.nanoTime() / 1000000L;
 }
 
 // Devuelve true para una lectura utilizable como temperatura o humedad.
 boolean numeroValido(float valor) {
+  // Float.isFinite (Java) rechaza NaN («no es un número») e infinitos.
   return Float.isFinite(valor);
 }
 
@@ -72,7 +85,8 @@ void evento(int id, String tipo, String detalle) {
   }
 }
 
-// Registra un cierre normal y libera el puerto. exit también cierra la ventana.
+// Processing llama exit() al cerrar; super.exit() ejecuta el cierre normal del sketch.
+// cerrando evita registrar dos veces el mismo evento.
 public void exit() {
   if (!cerrando && archivos != null) {
     cerrando = true;

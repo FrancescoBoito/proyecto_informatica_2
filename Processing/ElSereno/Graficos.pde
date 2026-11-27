@@ -1,4 +1,5 @@
-// Gráficos hechos con Processing; usan el mismo historial que alimenta el CSV.
+// Gráficos hechos con funciones de dibujo de Processing; leen el buffer que
+// ArchivosCsv cargó del CSV y que actualiza con cada medición nueva.
 void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
                     String unidad, int columna, float umbral, boolean mostrarUmbral) {
   noStroke();
@@ -32,11 +33,14 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
   }
 
   int cantidad = archivos.cantidadGrafico();
+  // Arreglos temporales: una posición por fila del historial recuperado.
   int[] ids = new int[cantidad];
   float[] valores = new float[cantidad];
+  // Los infinitos iniciales permiten hallar los extremos reales en el bucle.
   float minimo = Float.POSITIVE_INFINITY, maximo = Float.NEGATIVE_INFINITY;
   for (int i = 0; i < cantidad; i++) {
     String[] fila = archivos.filaGrafico(i);
+    // ?: anidado convierte la columna «nodo» en 1, 2 o 0 si es inválida.
     ids[i] = fila[1].equals("1") ? 1 : fila[1].equals("2") ? 2 : 0;
     valores[i] = leerDatoGrafico(fila[columna]);
     if (ids[i] != 0 && Float.isFinite(valores[i])) {
@@ -45,6 +49,7 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
     }
   }
 
+  // Humedad siempre usa escala 0–100; temperatura y presión se ajustan a datos.
   if (columna == 4) {
     minimo = 0;
     maximo = 100;
@@ -56,6 +61,7 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
       minimo = min(minimo, umbral);
       maximo = max(maximo, umbral);
     }
+    // max y min son de Processing: el margen evita que la curva toque los bordes.
     float margen = max(columna == 5 ? 2 : 1.5f, (maximo - minimo) * 0.18f);
     minimo -= margen;
     maximo += margen;
@@ -64,6 +70,7 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
   float izq = x + 54, der = x + ancho - 17;
   float arriba = y + 76, abajo = y + alto - 36;
   for (int k = 0; k <= 3; k++) {
+    // lerp interpola entre dos posiciones; map transforma un dato a píxeles.
     float py = lerp(abajo, arriba, k / 3.0f);
     stroke(112, 140, 151, 70);
     strokeWeight(1);
@@ -83,16 +90,19 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
     }
   }
 
+  // Se dibuja una serie por nodo usando todas las posiciones del historial.
   for (int id = 1; id <= 2; id++) {
     int tono = id == 1 ? COLOR_NODO_1 : COLOR_NODO_2;
     boolean anterior = false;
     float pxAnterior = 0, pyAnterior = 0;
     for (int i = 0; i < cantidad; i++) {
       if (ids[i] != id) continue;
+      // Un campo vacío del CSV se convirtió en NaN y corta la línea de ese nodo.
       if (!Float.isFinite(valores[i])) {
         anterior = false;
         continue;
       }
+      // El eje horizontal representa orden de muestras, no tiempo exacto.
       float px = cantidad == 1 ? der : lerp(izq, der, i / (float)(cantidad - 1));
       float py = map(valores[i], minimo, maximo, abajo, arriba);
       if (anterior) {
@@ -135,6 +145,7 @@ void dibujarGrafico(int x, int y, int ancho, int alto, String titulo,
   }
 }
 
+// Convierte una celda CSV a float; un vacío o texto inválido deja un hueco.
 float leerDatoGrafico(String texto) {
   try {
     return texto.isEmpty() ? Float.NaN : Float.parseFloat(texto);

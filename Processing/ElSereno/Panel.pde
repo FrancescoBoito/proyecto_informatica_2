@@ -1,8 +1,10 @@
+// Variables globales del sketch: recuerdan la posición de la tabla y los colores.
 int filaInicial = 0;
 final int COLOR_NODO_1 = 0xff52dfd2;
 final int COLOR_NODO_2 = 0xffffb86f;
 
-// Dibuja controles, los dos nodos, tendencias y mediciones recientes.
+// background, fill, rect, text y las variables width/height son de Processing;
+// se llaman en cada draw() para pintar controles, nodos, gráficos y tabla.
 void dibujarPanel() {
   background(12, 22, 32);
   noStroke();
@@ -17,6 +19,7 @@ void dibujarPanel() {
   textSize(13);
   text("RED MICROCLIMÁTICA  /  MONITOREO EN VIVO", 228, 37);
 
+  // ?: selecciona un rótulo sin acceder al arreglo cuando está vacío.
   String nombre = puertos.length == 0 ? "Sin puertos" : puertos[puertoElegido] + "  ›";
   boton(20, 54, 202, puerto == null ? nombre : puertoActivo);
   boton(230, 54, 104, "Actualizar");
@@ -33,6 +36,7 @@ void dibujarPanel() {
   boton(405, 102, 75, entradas[1] + (campoActivo == 1 ? "|" : ""));
   boton(495, 102, 144, esperandoConfig ? "Confirmando…" : "Enviar límites");
 
+  // El ?: anidado elige el estado de USB que verá el usuario.
   String enlace = estado == MONITOREO ? "Base conectada"
                       : estado == ESPERA ? "Esperando base" : "Base desconectada";
   fill(206, 223, 231);
@@ -42,6 +46,7 @@ void dibujarPanel() {
 
   dibujarNodo(nodos[0], 20, 175, "DHT22 + BMP180");
   dibujarNodo(nodos[1], 630, 175, "DHT11 + BMP180");
+  // Las columnas 5, 4 y 6 del CSV son BMP °C, humedad DHT y presión BMP.
   dibujarGrafico(20, 370, 386, 290, "TEMPERATURA BMP", "°C", 5, limiteFrio, true);
   dibujarGrafico(427, 370, 386, 290, "HUMEDAD DHT", "%", 4, limiteHumedad, true);
   dibujarGrafico(834, 370, 386, 290, "PRESIÓN BMP", "hPa", 6, 0, false);
@@ -69,6 +74,7 @@ void dibujarNodo(Nodo nodo, int x, int y, String sensores) {
   else if (nodo.recibido) estadoNodo = "Sin señal LoRa";
   text(estadoNodo, x + 18, y + 51);
 
+  // Las cifras instantáneas solo se ven mientras llegan datos recientes.
   if (nodo.enLinea) {
     fill(nodo.id == 1 ? COLOR_NODO_1 : COLOR_NODO_2);
     textSize(26);
@@ -84,11 +90,13 @@ void dibujarNodo(Nodo nodo, int x, int y, String sensores) {
   }
   fill(203, 223, 231);
   textSize(13);
+  // Este total persiste en el objeto durante la sesión aunque se pierda el enlace.
   text("Frío acumulado: " + decimal(nodo.exposicion, 2) + " °C·min", x + 211, y + 145);
   boolean frio = nodo.enLinea && numeroValido(nodo.temperaturaBmp) && nodo.frio;
   boolean humedad = nodo.enLinea && numeroValido(nodo.humedad) && nodo.humedadAlta;
   if (frio || humedad) {
     fill(255, 151, 126);
+    // El ?: anidado elige un texto para ambas alarmas o solo la activa.
     String alarmas = frio && humedad ? "HELADA Y HUMEDAD" : frio ? "HELADA" : "HUMEDAD ALTA";
     textAlign(RIGHT);
     text(alarmas, x + 574, y + 145);
@@ -98,6 +106,7 @@ void dibujarNodo(Nodo nodo, int x, int y, String sensores) {
 
 // Muestra la tabla de mediciones recientes, empezando por la más nueva.
 void dibujarHistorial() {
+  // Dos arreglos paralelos: la posición x[i] corresponde al título y campo i.
   int[] x = {30, 255, 350, 448, 570, 700, 821, 945, 1068};
   String[] titulos = {"Fecha y hora", "Nodo", "Sec.", "DHT °C", "Hum. %", "BMP °C", "hPa", "dBm", "°C·min"};
   fill(244);
@@ -110,6 +119,7 @@ void dibujarHistorial() {
   fill(177, 210, 224);
   for (int i = 0; i < titulos.length; i++) text(titulos[i], x[i], 726);
   int cantidad = archivos.cantidadReciente();
+  // Math.min/max son de Java y acotan el desplazamiento a filas existentes.
   filaInicial = Math.min(filaInicial, Math.max(0, cantidad - 9));
   for (int fila = 0; fila < 9 && fila + filaInicial < cantidad; fila++) {
     int y = 732 + fila * 21;
@@ -122,8 +132,10 @@ void dibujarHistorial() {
   }
 }
 
+// Processing llama mouseWheel al mover la rueda; mouseY es la posición actual.
 public void mouseWheel(processing.event.MouseEvent rueda) {
   if (mouseY >= 690 && mouseY < 930) {
+    // constrain es de Processing y mantiene el índice dentro de la tabla.
     filaInicial = constrain(filaInicial + rueda.getCount(), 0,
                            Math.max(0, archivos.cantidadReciente() - 9));
   }
@@ -137,12 +149,14 @@ void aplicarLimites() {
   }
   if (esperandoConfig) return;
   try {
+    // Float.parseFloat y replace son Java; aceptan coma o punto decimal.
     float frio = Float.parseFloat(entradas[0].replace(',', '.'));
     float humedad = Float.parseFloat(entradas[1].replace(',', '.'));
     if (!numeroValido(frio) || frio < -40 || frio > 85 ||
         !numeroValido(humedad) || humedad < 0 || humedad > 100) {
       throw new NumberFormatException();
     }
+    // round es de Processing; se envía una cifra decimal como espera CONFIG_OK.
     frio = round(frio * 10) / 10.0f;
     humedad = round(humedad * 10) / 10.0f;
     entradas[0] = decimal(frio, 1);
@@ -157,13 +171,14 @@ void aplicarLimites() {
 // Abre un CSV con la aplicación asociada en la PC.
 void abrirCsv(Path ruta) {
   try {
+    // Desktop es Java y pide al sistema operativo abrir el CSV.
     Desktop.getDesktop().open(ruta.toFile());
   } catch (IOException | RuntimeException error) {
     aviso = "Archivo: " + ruta.toAbsolutePath();
   }
 }
 
-// Selecciona el control bajo el puntero y ejecuta su acción.
+// Processing llama mousePressed en cada clic; las coordenadas eligen la acción.
 public void mousePressed() {
   if (sobre(20, 54, 202) && puerto == null && puertos.length > 0) {
     puertoElegido = (puertoElegido + 1) % puertos.length;
@@ -189,6 +204,7 @@ public void mousePressed() {
   }
 }
 
+// Processing llama keyPressed al teclear; key, ENTER y ESC son datos del sketch.
 // Los campos aceptan enteros o decimales con punto o coma.
 public void keyPressed() {
   if (campoActivo < 0) return;
@@ -196,11 +212,13 @@ public void keyPressed() {
   if (key == ENTER || key == RETURN) {
     aplicarLimites();
   } else if (key == ESC) {
+    // Poner key a 0 impide que Processing cierre la ventana con ESC.
     key = 0;
     entradas[campoActivo] = decimal(campoActivo == 0 ? limiteFrio : limiteHumedad, 1);
     campoActivo = -1;
   } else if (key == BACKSPACE && texto.length() > 0) {
     entradas[campoActivo] = texto.substring(0, texto.length() - 1);
+  // La condición limita longitud y caracteres; la validación numérica viene al enviar.
   } else if (texto.length() < 7 && (key >= '0' && key <= '9' || key == '.' || key == ',' || key == '-')) {
     entradas[campoActivo] += key;
   }

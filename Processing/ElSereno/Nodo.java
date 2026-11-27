@@ -50,7 +50,7 @@ final class Nodo {
 
     // TP9 - Cálculo numérico: integración de Euler con la muestra anterior.
     // Si el límite es 0 °C y la muestra anterior fue -2 °C, hubo 2 °C de frío.
-    // Si pasan 3 minutos hasta la muestra siguiente, se suman 2 × 3 = 6 °C·min.
+    // Si pasan 6 segundos, se suman 2 × 0,1 = 0,2 °C·min
     // Fórmula: aporte = max(0, límite - anterior) × intervaloMs / 60000.
     // Dividimos por 60000 para convertir milisegundos en minutos.
     // Es una aproximación: supone que la temperatura anterior se mantuvo

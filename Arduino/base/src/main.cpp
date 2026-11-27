@@ -1,3 +1,4 @@
+// importamos librerias y la clase medicion
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -5,8 +6,10 @@
 #include <LiquidCrystal_I2C.h>
 #include <math.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string.h> 
 #include "Medicion.h"
+
+// Declaramos constantes para los pines de la placa ESP32 y los tiempos de espera.
 
 // El RA-02 usa SPI. El LCD 1602 usa I²C y conserva la dirección 0x27.
 constexpr int LORA_SCK = 18, LORA_MISO = 19, LORA_MOSI = 23;
@@ -50,7 +53,8 @@ bool turnoEvaluado[CANTIDAD_NODOS] = {};
 bool turnoCorrecto[CANTIDAD_NODOS] = {};
 uint32_t errores[CANTIDAD_NODOS] = {};
 
-// Extremos de temperatura BMP180 de cada nodo, desde que encendió la base.
+// Extremos de temperatura BMP180 de cada nodo, desde que encendió la base
+// Arreglo de 2 elementos: índice 0 = Nodo 1, índice 1 = Nodo 2. Inicializados a NAN.
 float temperaturaMin[CANTIDAD_NODOS] = {NAN, NAN};
 float temperaturaMax[CANTIDAD_NODOS] = {NAN, NAN};
 
@@ -70,11 +74,13 @@ float limiteFrio = 0.0f;
 float limiteHumedad = 90.0f;
 uint32_t ultimoEstado = 0;
 
+// Definimos variables para el comando recibido por USB. Se acumula en un arreglo de 48 char
 char comando[48];
 size_t largoComando = 0;
 bool comandoLargo = false;
 
 // El estado indica qué puede aceptar la base en el turno actual.
+// El tipo etapa alterna entre esos tres valores
 enum Etapa { ENTRE_TURNOS, ESPERANDO_DATOS, ESPERANDO_OK };
 Etapa etapa = ENTRE_TURNOS;
 
@@ -89,6 +95,7 @@ void filaLCD(uint8_t fila, const String &texto) {
     lcd.setCursor(0, fila);
     for (uint8_t columna = 0; columna < 16; columna++) {
         lcd.print(columna < texto.length() ? texto[columna] : ' ');
+        // condición ? valor_si_es_verdadera : valor_si_es_falsa
     }
 }
 

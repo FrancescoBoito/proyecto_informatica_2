@@ -1,4 +1,3 @@
-cat > README.md <<'FIN_README_SERENO'
 # El Sereno V4.2
 
 **Sistema de monitoreo ambiental inalámbrico** para vigilar **frío (heladas) y humedad alta** en dos puntos distintos, con alarmas, registro histórico y gráficos en vivo en la computadora.
@@ -321,13 +320,25 @@ Los cuatro valores son temperatura DHT (°C), humedad (%), temperatura BMP180 (�
 
 ### Frío acumulado (°C·min)
 
-Processing acumula el frío mediante la aproximación:
+Processing usa la **integración numérica de Euler** con la muestra anterior
+para calcular, por separado para cada nodo, cuánto tiempo y cuánto estuvo la
+temperatura BMP180 por debajo del límite configurado:
 
 ```
-(límite de frío − temperatura anterior) × minutos transcurridos
+aporte = max(0, límite de frío − temperatura anterior) × minutos transcurridos
+frío acumulado = frío acumulado anterior + aporte
 ```
 
-solo durante los tramos bajo el límite. Los intervalos superiores a 15 s y los que cruzan un cambio de umbral no se suman para no inventar datos.
+Por ejemplo, con un límite de 0 °C, una muestra anterior de −2 °C y un
+intervalo de 6 segundos (0,1 minutos), el aporte es 0,2 °C·min. El valor aparece en la
+tarjeta de cada nodo y en la columna `frio_c_min` del CSV. No activa una alarma
+nueva: las alarmas existentes siguen usando las lecturas instantáneas.
+
+El método aproxima el intervalo con la temperatura del comienzo. Solo se suma
+si las dos lecturas BMP180 son válidas; se descartan intervalos de 15 s o más,
+lecturas posteriores a una desconexión y el tramo que cruza un cambio de
+umbral. El acumulado se reinicia al cerrar Processing. Ver
+`TP9_Calculo_Numerico.md` para la elección del método, las pruebas y sus límites.
 
 ---
 
@@ -382,6 +393,7 @@ La fecha y hora provienen de la PC, porque la base no tiene reloj propio.
 ```
 proyecto_informatica_2/
 ├── README.md
+├── TP9_Calculo_Numerico.md    Método de Euler, pruebas y conclusiones
 ├── .gitignore
 ├── Arduino/
 │   ├── nodo/
@@ -537,4 +549,3 @@ En esa versión se modificó el programa de la base:
 - Se corrigieron las conexiones de la base según el firmware actual: pulsador en GPIO14, LED verde en GPIO26 y LED rojo en GPIO25.
 
 La interfaz se probó en Processing 4 con ambos nodos en línea, gráficos con mediciones reales y límites confirmados por la base.
-FIN_README_SERENO
